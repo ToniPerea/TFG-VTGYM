@@ -1,0 +1,6 @@
+[submodule "visual-training-gym-front"]
+	path = visual-training-gym-front
+	url = https://github.com/ToniPerea/visual-training-gym-front
+[submodule "visual-training-gym-api"]
+	path = visual-training-gym-api
+	url = https://github.com/ToniPerea/visual-training-gym-api

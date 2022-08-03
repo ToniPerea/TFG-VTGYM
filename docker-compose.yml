@@ -1,0 +1,41 @@
+# docker compose up
+# or
+# docker-compose up
+version: "3"
+services:
+  backend:
+    container_name: backend
+    restart: always 
+    stop_grace_period: 5s
+    ulimits:
+      nproc: 65535
+
+    # image: username/backend:latest
+    build:
+      context: ./visual-training-gym-api
+      dockerfile: docker/Dockerfile
+    ports:
+      - 8080:8080
+    networks:
+      - networkingBackAndFront
+
+  frontend:
+    container_name: frontend
+    restart: always 
+    stop_grace_period: 5s
+    ulimits:
+      nproc: 65535
+
+    # image: username/frontend:latest
+    build:
+      context: ./visual-training-gym-front
+      dockerfile: docker/Dockerfile
+    ports:
+      - 80:80
+    networks:
+      - networkingBackAndFront
+
+
+
+networks:
+  networkingBackAndFront:

@@ -1,0 +1,273 @@
+AWSTemplateFormatVersion: 2010-09-09
+Metadata:
+  License: Apache-2.0
+Description: Create the AWS resources for Visual Training Gym Application Deployment
+
+
+Parameters:
+  InstanceType:
+    Description: WebServer EC2(Elastic Computer 2) instance type
+    Type: String
+    Default: t3.small
+    AllowedValues: [t2.nano, t2.micro, t2.small, t2.medium, t2.large, t2.xlarge, t2.2xlarge,
+      t3.nano, t3.micro, t3.small, t3.medium, t3.large, t3.xlarge, t3.2xlarge]
+    ConstraintDescription: must be a valid EC2 instance type.
+  # Sistema operativo que se le mete a la instancia. AmiId(Amazon machine image ID)
+  LatestAmiId:
+    Type:  'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+
+Resources:
+  VPC:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: 'true'
+      EnableDnsHostnames: 'true'
+      Tags:
+        - Key: Name
+          Value: VTG
+
+  InternetGateway:
+    Type: 'AWS::EC2::InternetGateway'
+    Properties:
+      Tags:
+        - Key: Name
+          Value: VTG
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: VTG Public Subnet (AZ1)
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 1, !GetAZs  '' ]
+      CidrBlock: 10.0.2.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: VTG Public Subnet (AZ2)
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 0, !GetAZs  '' ]
+      CidrBlock: 10.0.11.0/24
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: VTG Private Subnet (AZ1)
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 1, !GetAZs  '' ]
+      CidrBlock: 10.0.12.0/24
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: VTG Private Subnet (AZ2)
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: VTG Public Routes
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+
+
+  VTGKeyPair:
+    Type: 'AWS::EC2::KeyPair'
+    Properties:
+      KeyName: MyKeyPair
+
+# IAM -> Identity and access management
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+        - !Ref InstanceRole
+
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action: sts:AssumeRole
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+                - ssm.amazonaws.com
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+
+
+  VTGSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: SecurityGroupVTG
+      GroupDescription: Enables public access to ports 80
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        #- IpProtocol: tcp
+        #  FromPort: "22"
+        #  ToPort: "22"
+        #  CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: "80"
+          ToPort: "80"
+          CidrIp: 0.0.0.0/0
+  VTGInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref 'InstanceType'
+      SubnetId: !Ref PublicSubnet1
+      IamInstanceProfile: !Ref InstanceProfile
+      Tags:
+        - Key: Name
+          Value: VisualTrainigGym
+      ImageId: !Ref 'LatestAmiId'
+      KeyName: !Ref VTGKeyPair
+      SecurityGroupIds:
+        - Ref: VTGSecurityGroup
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeType: gp3
+            VolumeSize: '12'
+            DeleteOnTermination: 'true'
+            Encrypted: 'false'
+      UserData: !Base64 |
+        #!/bin/bash
+
+        # Update SO
+        sudo yum update -y
+
+        # Installing git 
+        sudo yum install git -y
+
+        # Installing docker
+        
+        sudo yum install docker -y
+
+        sudo service docker start
+        sudo usermod -a -G docker ec2-user
+
+        # Install docker-compose
+        sudo curl -L https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m) -o /usr/local/bin/docker-compose
+        sudo chmod +x /usr/local/bin/docker-compose
+
+        # Create folder for services:
+        mkdir Toni
+        cd Toni
+
+        git clone https://github.com/ToniPerea/visual-training-gym-api.git
+        git clone https://github.com/ToniPerea/visual-training-gym-front.git
+
+        echo  "DB_URL=mongodb+srv://ToniPerea:Antonio1998@cluster0.a9j2gy5.mongodb.net/test" >> visual-training-gym-api/.env
+        echo  "PORT=8080" >> visual-training-gym-api/.env
+        
+
+        # Create docker-composse file
+        echo "
+        version: '3'
+        services:
+          backend:
+            container_name: backend
+            restart: always 
+            stop_grace_period: 5s
+            ulimits:
+              nproc: 65535
+        
+            # image: username/backend:latest
+            build:
+              context: ./visual-training-gym-api
+              dockerfile: docker/Dockerfile
+            ports:
+              - 8080:8080
+            networks:
+              - networkingBackAndFront
+        
+          frontend:
+            container_name: frontend
+            restart: always 
+            stop_grace_period: 5s
+            ulimits:
+              nproc: 65535
+        
+            # image: username/frontend:latest
+            build:
+              context: ./visual-training-gym-front
+              dockerfile: docker/Dockerfile
+            ports:
+              - 80:80
+            networks:
+              - networkingBackAndFront
+        
+        
+        
+        networks:
+          networkingBackAndFront:
+        " > docker-compose.yaml
+        # Run docker-composse
+        
+        # Start docker service
+        systemctl start docker
+
+        # Start services
+        sudo /usr/local/bin/docker-compose up -d
+
+Outputs:
+  VpcId:
+    Description: The VPC ID
+    Value: !Ref VPC
+
+  InstanceId:
+    Description: InstanceId of the instance
+    Value: !Ref 'VTGInstance'
+
+  PublicIp:
+    Description: EC2 Instance Public Ip
+    Value: !GetAtt VTGInstance.PublicIp

@@ -206,7 +206,7 @@ Resources:
         git clone https://github.com/ToniPerea/visual-training-gym-api.git
         git clone https://github.com/ToniPerea/visual-training-gym-front.git
 
-        echo  "DB_URL=mongodb+srv://ToniPerea:Antonio1998@cluster0.a9j2gy5.mongodb.net/test" >> visual-training-gym-api/.env
+        echo  "DB_URL=mongodb+srv://ToniPerea:Antonio1998@cluster0.a9j2gy5.mongodb.net/visual_gym_db" >> visual-training-gym-api/.env
         echo  "PORT=8080" >> visual-training-gym-api/.env
         
 
